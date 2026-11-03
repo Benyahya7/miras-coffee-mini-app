@@ -354,6 +354,7 @@ h1,h2,h3{margin:0;}
 .mira-form{display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--line);}
 .mira-form input{flex:1; min-width:0; border:1px solid var(--line); border-radius:999px; padding:11px 14px; font-size:14px; background:var(--bg); color:var(--ink);}
 .mira-form button{border:0; border-radius:999px; padding:11px 16px; font-weight:800; background:var(--green); color:#fff; cursor:pointer;}
+.card.sold-out img{opacity:.45;filter:grayscale(.6)} .card.sold-out .add-btn{background:#b42318;}
 </style>
 </head>
 <body>
@@ -852,8 +853,8 @@ function renderMenu(){
   else $("menuEmpty").textContent = "Nothing matches that search — try “latte”, “tea” or “croissant”.";
   $("menuGrid").innerHTML = list.map(function(it){
     var fav = !!state.favs[it[0]];
-    return '<div class="card" data-open="' + it[0] + '">'
-      + (it[5] ? '<span class="tag">' + esc(it[5]) + '</span>' : '')
+    return '<div class="card' + (soldOutIds[it[0]] ? ' sold-out' : '') + '" data-open="' + it[0] + '">'
+      + (soldOutIds[it[0]] ? '<span class="tag" style="background:#b42318">Sold out</span>' : (it[5] ? '<span class="tag">' + esc(it[5]) + '</span>' : ''))
       + '<button class="fav-btn' + (fav ? " on" : "") + '" data-fav="' + it[0] + '" aria-label="Save ' + esc(it[1]) + ' to favourites">' + heartSVG(fav) + '</button>'
       + '<img src="assets/' + it[0] + '.jpg" alt="' + esc(it[1]) + '" loading="lazy"/>'
       + '<div class="c-in"><h4>' + esc(it[1]) + '</h4><p class="desc">' + esc(it[4]) + '</p>'
@@ -886,6 +887,7 @@ bindRail();
 
 /* ================= item sheet ================= */
 function openSheet(id){
+  if (typeof soldOutIds !== "undefined" && soldOutIds[id]) { toast("Sorry, that item is sold out right now"); return; }
   var it = ITEMS[id]; if (!it) return;
   sel = { id: id, size: "M", milk: "Regular", shot: false, syrup: false, sugar: 1, qty: 1 };
   $("sheetImg").src = "assets/" + id + ".jpg";
@@ -1116,6 +1118,7 @@ function renderRewards(){
     var d = new Date(); d.setDate(d.getDate() + state.resDay);
     var res = { name: name, date: d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }), time: state.resTime, guests: state.guests };
     state.reservations.unshift(res);
+    if (typeof fbSaveReservation === "function") fbSaveReservation(res);
     $("reserveForm").style.display = "none";
     $("reserveDone").innerHTML = '<div class="success-card"><div class="tick"><svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>'
       + '<h3>Table reserved, ' + esc(name) + '</h3>'
@@ -1176,10 +1179,46 @@ async function fbSaveOrder(order){
   try {
     await fbDb.collection("users").doc(fbUser.uid).set({
       name: fbUser.displayName || "", email: fbUser.email || "",
-      stars: state.stars, orders: state.orders.slice(0, 20).map(fbPlainOrder)
+      stars: state.stars, orders: state.orders.slice(0, 20).map(fbPlainOrder), reservations: state.reservations.slice(0, 20)
     }, { merge: true });
   } catch (e) { /* saving is best-effort; the order itself is unaffected */ }
 }
+var soldOutIds = {};
+async function fbLoadSoldOut(){
+  if (!fbDb) return;
+  try {
+    var doc = await fbDb.collection("config").doc("menu").get();
+    if (doc.exists) {
+      soldOutIds = {};
+      ((doc.data() || {}).soldOut || []).forEach(function(id){ soldOutIds[id] = true; });
+      renderMenu();
+    }
+  } catch (e) { /* config unavailable — keep full menu */ }
+}
+async function fbRefreshOrders(){
+  if (!fbUser || !fbDb) return;
+  try {
+    var doc = await fbDb.collection("users").doc(fbUser.uid).get();
+    if (!doc.exists) return;
+    var saved = (doc.data() || {}).orders || [];
+    var changed = false;
+    state.orders.forEach(function(o){
+      saved.forEach(function(s){ if (String(s.id) === String(o.id) && s.step !== o.step) { o.step = s.step; changed = true; } });
+    });
+    if (changed) renderOrders();
+  } catch (e) { /* refresh is best-effort */ }
+}
+async function fbSaveReservation(res){
+  if (!fbUser || !fbDb) return;
+  try {
+    await fbDb.collection("users").doc(fbUser.uid).set({
+      name: fbUser.displayName || "", email: fbUser.email || "",
+      reservations: state.reservations.slice(0, 20)
+    }, { merge: true });
+  } catch (e) { /* saving is best-effort */ }
+}
+if (fbDb) { fbLoadSoldOut(); setInterval(fbRefreshOrders, 60000); }
+
 if (fbAuth) {
   $("googleBtn").addEventListener("click", async function(){
     try {
@@ -1204,15 +1243,18 @@ if (fbAuth) {
           var saved = Array.isArray(d.orders) ? d.orders : [];
           var seen = {}; state.orders.forEach(function(o){ seen[o.id] = true; });
           saved.forEach(function(o){ if (!seen[o.id]) state.orders.push(o); });
+          var savedRes = Array.isArray(d.reservations) ? d.reservations : [];
+          var seenRes = {}; state.reservations.forEach(function(r){ seenRes[r.name + "|" + r.date + "|" + r.time] = true; });
+          savedRes.forEach(function(r){ if (!seenRes[r.name + "|" + r.date + "|" + r.time]) state.reservations.push(r); });
           state.orders.sort(function(a, b){ return String(b.id).localeCompare(String(a.id)); });
           await fbDb.collection("users").doc(u.uid).set({
             name: u.displayName || "", email: u.email || "",
-            stars: state.stars, orders: state.orders.slice(0, 20).map(fbPlainOrder)
+            stars: state.stars, orders: state.orders.slice(0, 20).map(fbPlainOrder), reservations: state.reservations.slice(0, 20)
           }, { merge: true });
         } else {
           await fbDb.collection("users").doc(u.uid).set({
             name: u.displayName || "", email: u.email || "",
-            stars: state.stars, orders: state.orders.slice(0, 20).map(fbPlainOrder)
+            stars: state.stars, orders: state.orders.slice(0, 20).map(fbPlainOrder), reservations: state.reservations.slice(0, 20)
           }, { merge: true });
         }
         renderStars(); renderOrders(); updateBadges();
@@ -1319,6 +1361,7 @@ function miraAnswer(raw){
 }
 function miraAddToCart(id){
   var it = ITEMS[id]; if (!it) return;
+  if (soldOutIds[id]) { toast("Sorry, that item is sold out right now"); return; }
   var sel2 = { size: "M", milk: "Regular", shot: false, syrup: false, sugar: isDrink(it) ? 1 : 0 };
   var key = [id, sel2.size, sel2.milk, sel2.shot, sel2.syrup, sel2.sugar].join("|");
   var found = null;
