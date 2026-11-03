@@ -326,6 +326,34 @@ h1,h2,h3{margin:0;}
 .account-bar .ab-in span{font-size:12px; color:var(--ink-2); font-weight:600;}
 .account-bar button{flex:none; border:0; border-radius:999px; padding:9px 14px; font-weight:800; font-size:13px; background:#fff; color:#1f1f1f; border:1px solid var(--line); cursor:pointer;}
 .account-bar button.green{background:var(--green); color:#fff; border-color:var(--green);}
+
+/* ---------- Mira AI assistant ---------- */
+.mira-fab{position:fixed; bottom:calc(var(--tab-h) + 16px); left:50%; margin-left:150px; width:58px; height:58px; border-radius:50%; border:3px solid #fff; box-shadow:0 8px 24px rgba(0,0,0,.35); padding:0; cursor:pointer; z-index:60; overflow:hidden; background:#fff;}
+.mira-fab img{width:100%; height:100%; object-fit:cover; display:block;}
+@media (max-width:440px){ .mira-fab{left:auto; right:14px; margin-left:0;} }
+.mira-panel{position:fixed; bottom:calc(var(--tab-h) + 86px); left:50%; transform:translateX(-50%); width:min(400px, calc(100% - 28px)); height:min(560px, 62vh); background:var(--surface); border:1px solid var(--line); border-radius:22px; box-shadow:0 16px 48px rgba(0,0,0,.35); z-index:61; display:none; flex-direction:column; overflow:hidden;}
+.mira-panel.open{display:flex;}
+.mira-head{display:flex; align-items:center; gap:10px; padding:12px 14px; background:var(--green); color:#fff;}
+.mira-head img{width:42px; height:42px; border-radius:50%; object-fit:cover; border:2px solid #fff; flex:none;}
+.mira-head .mh-in{flex:1; min-width:0;}
+.mira-head .mh-in b{display:block; font-size:16px;}
+.mira-head .mh-in span{font-size:12px; opacity:.85; font-weight:600;}
+.mira-head button{border:0; background:rgba(255,255,255,.2); color:#fff; width:32px; height:32px; border-radius:50%; font-size:18px; cursor:pointer;}
+.mira-msgs{flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px;}
+.mira-msg{max-width:88%; padding:10px 13px; border-radius:16px; font-size:14px; line-height:1.45; font-weight:600;}
+.mira-msg.bot{align-self:flex-start; background:var(--bg); border:1px solid var(--line); color:var(--ink);}
+.mira-msg.user{align-self:flex-end; background:var(--green); color:#fff;}
+.mira-card{margin-top:8px; display:flex; gap:10px; align-items:center; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:8px;}
+.mira-card img{width:52px; height:52px; border-radius:10px; object-fit:cover; flex:none;}
+.mira-card .mc-in{flex:1; min-width:0;}
+.mira-card .mc-in b{display:block; font-size:13.5px; color:var(--ink);}
+.mira-card .mc-in span{font-size:12px; color:var(--ink-2);}
+.mira-card button{border:0; border-radius:999px; padding:8px 12px; font-weight:800; font-size:12.5px; background:var(--green); color:#fff; cursor:pointer; flex:none;}
+.mira-chips{display:flex; gap:8px; padding:0 14px 10px; overflow-x:auto;}
+.mira-chips button{flex:none; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:999px; padding:7px 12px; font-size:12.5px; font-weight:700; cursor:pointer;}
+.mira-form{display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--line);}
+.mira-form input{flex:1; min-width:0; border:1px solid var(--line); border-radius:999px; padding:11px 14px; font-size:14px; background:var(--bg); color:var(--ink);}
+.mira-form button{border:0; border-radius:999px; padding:11px 16px; font-weight:800; background:var(--green); color:#fff; cursor:pointer;}
 </style>
 </head>
 <body>
@@ -604,6 +632,27 @@ h1,h2,h3{margin:0;}
   <div class="sheet-foot">
     <button class="cta" id="addBtn"><span id="addLabel">Add to cart</span><span id="addPrice">0 MAD</span></button>
   </div>
+</div>
+
+<button class="mira-fab" id="miraFab" aria-label="Ask Mira"><img src="assets/mira-logo.jpg" alt="Mira assistant"/></button>
+<div class="mira-panel" id="miraPanel" role="dialog" aria-label="Mira assistant chat">
+  <div class="mira-head">
+    <img src="assets/mira-logo.jpg" alt="Mira logo"/>
+    <div class="mh-in"><b>Mira</b><span>Mira's Coffee assistant · instant answers</span></div>
+    <button id="miraClose" aria-label="Close chat">×</button>
+  </div>
+  <div class="mira-msgs" id="miraMsgs"></div>
+  <div class="mira-chips" id="miraChips">
+    <button data-q="Best sellers">Best sellers</button>
+    <button data-q="Moroccan drinks">Moroccan</button>
+    <button data-q="Under 25 MAD">Under 25 MAD</button>
+    <button data-q="Hours and delivery">Hours &amp; delivery</button>
+    <button data-q="My stars">My stars</button>
+  </div>
+  <form class="mira-form" id="miraForm">
+    <input id="miraInput" type="text" placeholder="Ask Mira about the menu…" autocomplete="off"/>
+    <button type="submit">Send</button>
+  </form>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1173,6 +1222,134 @@ if (fbAuth) {
   });
   fbRenderAccount();
 }
+
+
+/* ================= Mira AI assistant (rule-first, like Dragon AI) ================= */
+/* No API calls, no tokens burned: Mira answers from the menu, hours, promos and
+   stars already in this page. She never invents prices or hours, never adds
+   items to the cart by herself except when you tap "Add" on her suggestion,
+   and for anything she does not know she points you to Menu / Search. */
+var MIRA_GREET = ["hi","hello","hey","salam","bonjour","hola","good morning","good afternoon","good evening","yo"];
+function miraTokens(s){
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(function(w){ return w.length > 0; });
+}
+function miraFindDishes(q){
+  var qt = miraTokens(q);
+  if (!qt.length) return [];
+  var scored = MENU.map(function(it){
+    var nameToks = miraTokens(it[1]);
+    var score = 0;
+    qt.forEach(function(w){
+      if (nameToks.indexOf(w) >= 0) score += 2;
+      else if (w.length >= 4) {
+        nameToks.forEach(function(nt){ if (nt.indexOf(w) === 0) score += 1; });
+      }
+    });
+    return { it: it, score: score };
+  }).filter(function(r){ return r.score > 0; });
+  scored.sort(function(a, b){ return b.score - a.score || a.it[3] - b.it[3]; });
+  return scored.slice(0, 3).map(function(r){ return r.it; });
+}
+function miraCard(it){
+  return '<div class="mira-card"><img src="assets/' + it[0] + '.jpg" alt="' + esc(it[1]) + '"/>'
+    + '<div class="mc-in"><b>' + esc(it[1]) + '</b><span>' + it[3] + ' MAD · ' + esc(it[4]) + '</span></div>'
+    + '<button data-mira-add="' + it[0] + '">Add</button></div>';
+}
+function miraCards(items){
+  return items.map(miraCard).join("");
+}
+function miraByCat(cat, n){
+  return MENU.filter(function(it){ return it[2] === cat; }).slice(0, n || 4);
+}
+function miraSay(html){
+  var d = document.createElement("div"); d.className = "mira-msg bot"; d.innerHTML = html;
+  $("miraMsgs").appendChild(d); $("miraMsgs").scrollTop = $("miraMsgs").scrollHeight;
+}
+function miraUserSay(text){
+  var d = document.createElement("div"); d.className = "mira-msg user"; d.textContent = text;
+  $("miraMsgs").appendChild(d); $("miraMsgs").scrollTop = $("miraMsgs").scrollHeight;
+}
+function miraAnswer(raw){
+  var q = raw.trim(); var lq = q.toLowerCase();
+  if (!q) return "Ask me about a dish, the hours, delivery, stars or promos — for example, try “cappuccino” or “best sellers”.";
+  if (MIRA_GREET.indexOf(lq) >= 0 || lq.indexOf("good morning") === 0 || lq.indexOf("good evening") === 0)
+    return "Hi! I'm Mira, your Mira's Coffee assistant. ☕ Ask me what you're craving, and I'll find it on the menu — I can show you dishes, prices, hours, delivery and your stars. What sounds good today?";
+  if (/\b(hour|hours|open|close|closing|when.*open|where|location|address|marrakech|guéliz|gueliz)\b/.test(lq))
+    return "We're in Guéliz, Marrakech, open daily 7:30 AM – 11:00 PM. You can pick up in store or get delivery — see “Hours &amp; delivery” below for delivery details.";
+  if (lq.indexOf("star") >= 0)
+    return "Mira Stars: you earn 1 star per 10 MAD. Reach 100 stars for 35 MAD off your next order — use the switch at checkout. You currently have " + state.stars + " stars.";
+  if (lq.indexOf("promo") >= 0 || lq.indexOf("code") >= 0 || lq.indexOf("discount") >= 0 || lq.indexOf("offer") >= 0)
+    return "Current promo codes: <b>MIRA10</b> — 10% off any order, <b>WELCOME15</b> — 15% off, <b>MIRA20</b> — 20% off orders over 100 MAD. Enter a code at checkout.";
+  if (lq.indexOf("deliver") >= 0)
+    return "Delivery is 15 MAD — free on orders of 150 MAD and more. Or choose Pickup at checkout and collect in store. Pay cash, or at the counter when you pick up.";
+  if (lq.indexOf("pickup") >= 0 || lq.indexOf("pick up") >= 0 || lq.indexOf("takeaway") >= 0)
+    return "Pickup is available at checkout — you'll get a pickup code (MIRA-…) to show at the counter. Delivery is 15 MAD, free over 150 MAD.";
+  if (lq.indexOf("pay") >= 0 || lq.indexOf("cash") >= 0 || lq.indexOf("card") >= 0)
+    return "We take cash, or pay at the counter when you pick up. Card payment in the app isn't available yet.";
+  if (lq.indexOf("reserv") >= 0 || lq.indexOf("table") >= 0 || lq.indexOf("book") >= 0)
+    return "To reserve a table, use the Reserve tab — pick a day, time and party size, and we hold your table for 15 minutes past the reservation time.";
+  if (lq.indexOf("vegetarian") >= 0 || lq.indexOf("vegan") >= 0 || lq.indexOf("gluten") >= 0 || lq.indexOf("allerg") >= 0)
+    return "I don't have dietary tags for every dish yet, so I can't guarantee that — but these menu items contain no meat by name. Please check with staff for allergies before ordering." + miraCards([ITEMS.m5, ITEMS.m1, ITEMS.c5, ITEMS.b1]);
+  var budget = lq.match(/(?:under|less than|below|max)\s*(\d+)/);
+  if (budget || lq.indexOf("cheap") >= 0) {
+    var max = budget ? parseInt(budget[1], 10) : 20;
+    var cheap = MENU.filter(function(it){ return it[3] <= max; }).slice(0, 5);
+    if (!cheap.length) return "Nothing on the menu is under " + max + " MAD — the cheapest items start at 15 MAD (Moroccan Mint Tea).";
+    return "Here are tasty options under " + max + " MAD — tap Add on any of them:" + miraCards(cheap);
+  }
+  if (lq.indexOf("best") >= 0 || lq.indexOf("popular") >= 0 || lq.indexOf("recommend") >= 0 || lq.indexOf("signature") >= 0) {
+    var sig = MENU.filter(function(it){ return it[5] === "Signature" || it[5] === "Popular"; }).slice(0, 4);
+    return "Our bestsellers &amp; signatures — tap Add on anything you fancy:" + miraCards(sig);
+  }
+  if (lq.indexOf("moroccan") >= 0 || lq.indexOf("atay") >= 0 || lq.indexOf("mint tea") >= 0)
+    return "Moroccan favourites:" + miraCards(miraByCat("moroccan", 4));
+  if (lq.indexOf("european") >= 0) return "European classics:" + miraCards(miraByCat("european", 4));
+  if (lq.indexOf("american") >= 0) return "American favourites:" + miraCards(miraByCat("american", 4));
+  if (lq.indexOf("cold") >= 0 || lq.indexOf("iced") >= 0 || lq.indexOf("frapp") >= 0 || lq.indexOf("smoothie") >= 0)
+    return "Cold &amp; frappés:" + miraCards(miraByCat("cold", 5));
+  if (lq.indexOf("bakery") >= 0 || lq.indexOf("pastry") >= 0 || lq.indexOf("croissant") >= 0 || lq.indexOf("cake") >= 0 || lq.indexOf("sweet") >= 0)
+    return "Bakery &amp; sweets:" + miraCards(miraByCat("bakery", 5));
+  if (lq.indexOf("coffee") >= 0 && lq.split(/\s+/).length <= 2) {
+    var coffees = [ITEMS.m3, ITEMS.e2, ITEMS.a1, ITEMS.e1];
+    return "Coffee lovers, start here:" + miraCards(coffees);
+  }
+  var hits = miraFindDishes(q);
+  if (hits.length) return "I found these for you — tap Add on any of them:" + miraCards(hits);
+  return "I don't know that yet — I only know the Mira's Coffee menu, hours, delivery, stars and promos, and I won't guess at anything else. Try a dish name, “best sellers”, or use Menu / Search above. For anything else, ask in the bot chat.";
+}
+function miraAddToCart(id){
+  var it = ITEMS[id]; if (!it) return;
+  var sel2 = { size: "M", milk: "Regular", shot: false, syrup: false, sugar: isDrink(it) ? 1 : 0 };
+  var key = [id, sel2.size, sel2.milk, sel2.shot, sel2.syrup, sel2.sugar].join("|");
+  var found = null;
+  state.cart.forEach(function(l){ if (l.key === key) found = l; });
+  if (found) found.qty = Math.min(20, found.qty + 1);
+  else state.cart.push({ key: key, id: id, sel: sel2, qty: 1, unit: unitPrice(it, sel2) });
+  updateBadges(); renderCart(); toast(it[1] + " added to cart");
+}
+var miraGreeted = false;
+$("miraFab").addEventListener("click", function(){
+  var panel = $("miraPanel"); panel.classList.toggle("open");
+  if (panel.classList.contains("open") && !miraGreeted) {
+    miraGreeted = true;
+    miraSay("Hi! I'm Mira. ☕ Ask me about the menu, hours, delivery, stars or promos — or tap a suggestion below.");
+  }
+});
+$("miraClose").addEventListener("click", function(){ $("miraPanel").classList.remove("open"); });
+$("miraMsgs").addEventListener("click", function(e){
+  var btn = e.target.closest ? e.target.closest("[data-mira-add]") : null;
+  if (btn) miraAddToCart(btn.getAttribute("data-mira-add"));
+});
+$("miraChips").addEventListener("click", function(e){
+  var btn = e.target.closest ? e.target.closest("[data-q]") : null;
+  if (!btn) return;
+  var q = btn.getAttribute("data-q"); miraUserSay(q); miraSay(miraAnswer(q));
+});
+$("miraForm").addEventListener("submit", function(e){
+  e.preventDefault();
+  var q = $("miraInput").value; if (!q.trim()) return;
+  miraUserSay(q); miraSay(miraAnswer(q)); $("miraInput").value = "";
+});
 
 /* ================= init ================= */
 renderMenu();
