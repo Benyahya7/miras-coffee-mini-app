@@ -355,6 +355,8 @@ h1,h2,h3{margin:0;}
 .mira-form input{flex:1; min-width:0; border:1px solid var(--line); border-radius:999px; padding:11px 14px; font-size:14px; background:var(--bg); color:var(--ink);}
 .mira-form button{border:0; border-radius:999px; padding:11px 16px; font-weight:800; background:var(--green); color:#fff; cursor:pointer;}
 .card.sold-out img{opacity:.45;filter:grayscale(.6)} .card.sold-out .add-btn{background:#b42318;}
+.sold-stamp{position:absolute; top:46%; left:50%; width:118px; height:118px; transform:translate(-50%,-50%) rotate(-12deg); z-index:3; pointer-events:none; opacity:.96; filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));}
+.rail-card{position:relative;} .rail-card .sold-stamp{width:96px; height:96px;}
 </style>
 </head>
 <body>
@@ -853,7 +855,7 @@ function renderMenu(){
   else $("menuEmpty").textContent = "Nothing matches that search — try “latte”, “tea” or “croissant”.";
   $("menuGrid").innerHTML = list.map(function(it){
     var fav = !!state.favs[it[0]];
-    return '<div class="card' + (soldOutIds[it[0]] ? ' sold-out' : '') + '" data-open="' + it[0] + '">'
+    return '<div class="card' + (soldOutIds[it[0]] ? ' sold-out' : '') + '" data-open="' + it[0] + '">' + (soldOutIds[it[0]] ? '<img class="sold-stamp" src="assets/sold-out-stamp.svg" alt="Sold out"/>' : '')
       + (soldOutIds[it[0]] ? '<span class="tag" style="background:#b42318">Sold out</span>' : (it[5] ? '<span class="tag">' + esc(it[5]) + '</span>' : ''))
       + '<button class="fav-btn' + (fav ? " on" : "") + '" data-fav="' + it[0] + '" aria-label="Save ' + esc(it[1]) + ' to favourites">' + heartSVG(fav) + '</button>'
       + '<img src="assets/' + it[0] + '.jpg" alt="' + esc(it[1]) + '" loading="lazy"/>'
@@ -1192,6 +1194,13 @@ async function fbLoadSoldOut(){
       soldOutIds = {};
       ((doc.data() || {}).soldOut || []).forEach(function(id){ soldOutIds[id] = true; });
       renderMenu();
+      document.querySelectorAll("#bestRail [data-open]").forEach(function(card){
+        var id = card.getAttribute("data-open");
+        if (soldOutIds[id] && !card.querySelector(".sold-stamp")) {
+          var st = document.createElement("img"); st.className = "sold-stamp"; st.src = "assets/sold-out-stamp.svg"; st.alt = "Sold out";
+          card.appendChild(st);
+        }
+      });
     }
   } catch (e) { /* config unavailable — keep full menu */ }
 }
