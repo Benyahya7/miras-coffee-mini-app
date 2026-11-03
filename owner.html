@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Mira's Coffee — Owner Dashboard</title>
+<style>
+:root{--green:#0f4d2e;--green2:#14663d;--gold:#c9a227;--bg:#f4f1ea;--surface:#fff;--line:#e5ddd0;--ink:#1d2b23;--ink2:#6b7a70}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:760px;margin:0 auto;padding:16px 14px 60px}
+header{display:flex;gap:12px;align-items:center;background:var(--green);color:#fff;border-radius:18px;padding:14px 16px}
+header img{width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #fff;flex:none}
+header h1{margin:0;font-size:20px} header p{margin:2px 0 0;font-size:13px;opacity:.85}
+button{border:0;border-radius:999px;padding:10px 16px;font-weight:800;cursor:pointer;background:var(--green);color:#fff;font-size:14px}
+button.ghost{background:#fff;color:var(--green);border:1px solid var(--line)}
+button.small{padding:7px 12px;font-size:12.5px}
+button:disabled{opacity:.5;cursor:default}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;margin-top:14px}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px}
+.stat b{font-size:26px;display:block} .stat span{font-size:13px;color:var(--ink2);font-weight:700}
+.order{border:1px solid var(--line);border-radius:14px;padding:13px;margin-top:10px}
+.order h3{margin:0 0 4px;font-size:15.5px} .meta{font-size:12.5px;color:var(--ink2);font-weight:700}
+.items{font-size:13.5px;line-height:1.55;margin-top:8px;font-weight:600}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.steps button{background:#efe9dd;color:var(--ink)} .steps button.on{background:var(--green);color:#fff}
+.menu-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;font-weight:700}
+.menu-row:last-child{border-bottom:0}
+.switch{position:relative;width:48px;height:28px;flex:none;appearance:none;background:#ccc;border-radius:999px;outline:none;cursor:pointer}
+.switch:checked{background:var(--green)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:.15s}
+.switch:checked::after{left:23px}
+.note{font-size:13px;color:var(--ink2);line-height:1.5;font-weight:600}
+.hidden{display:none}
+table{width:100%;border-collapse:collapse;font-size:14px} td,th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left;font-weight:700} th{color:var(--ink2);font-size:12px}
+</style></head><body><div class="wrap">
+<header><img src="assets/mira-logo.jpg" alt="Mira logo"/><div style="flex:1"><h1>Owner dashboard</h1><p>Mira's Coffee · private — owner only</p></div><button id="authBtn" class="ghost">Sign in with Google</button></header>
+
+<div id="signedOut" class="card"><h2 style="margin-top:0">Sign in to see your shop</h2><p class="note">This page is hosted on GitHub Pages, but your shop data is not public: it lives in Firebase and only opens for the owner's Google account. Sign in with Google above.</p></div>
+<div id="notOwner" class="card hidden"><h2 style="margin-top:0">This account is not the owner</h2><p class="note">You signed in as <b id="notOwnerEmail"></b>. Only the owner's account can open this dashboard. Sign out and sign in with the owner's Google account.</p><button id="signOutBtn2">Sign out</button></div>
+
+<div id="dash" class="hidden">
+  <div style="display:flex;gap:10px;margin-top:14px"><button id="refreshBtn">Refresh</button><button id="signOutBtn" class="ghost">Sign out</button><span id="lastSync" class="note" style="align-self:center"></span></div>
+  <div class="stats">
+    <div class="stat"><b id="statToday">0</b><span>Orders today</span></div>
+    <div class="stat"><b id="statSales">0 MAD</b><span>Sales today</span></div>
+    <div class="stat"><b id="statActive">0</b><span>Orders in progress</span></div>
+    <div class="stat"><b id="statCust">0</b><span>Customers saved</span></div>
+  </div>
+
+  <div class="card"><h2 style="margin:0">Orders</h2><p class="note">Newest first. Tap a step to move the order — the customer sees the new status in the Mini App.</p><div id="ordersList"></div></div>
+
+  <div class="card"><h2 style="margin:0">Reservations (web)</h2><div id="resList"></div></div>
+
+  <div class="card"><h2 style="margin:0">Customers &amp; stars</h2><div id="custList"></div></div>
+
+  <div class="card"><h2 style="margin:0">Menu — sold out</h2><p class="note">Switch an item on to mark it sold out in the Mini App. Switch it off when it's back. Tap Save after changing.</p><div id="menuList"></div><button id="saveMenuBtn" style="margin-top:12px">Save sold-out list</button> <span id="menuSaved" class="note"></span></div>
+
+  <p class="note">Dashboard shows website orders from customers signed in with Google. Telegram bot orders are not here yet — they live in the bot's own records, and connecting them is the next step.</p>
+</div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+"use strict";
+var OWNER_EMAIL = "raiss95@gmail.com";
+var MENU = [
+ ["m1","Moroccan Mint Tea — Atay","moroccan",15,"Gunpowder green tea, fresh mint, poured high the traditional way. Served in a painted glass.","Signature"],
+ ["m2","Nous-Nous","moroccan",20,"Half strong coffee, half steamed milk — the classic Moroccan café half-and-half.","Popular"],
+ ["m3","Moroccan Spiced Coffee","moroccan",28,"Espresso warmed with cardamom, cinnamon and a whisper of black pepper.","Signature"],
+ ["m4","Moroccan Black Coffee","moroccan",16,"Strong, slow-brewed, served black with a date on the side.",""],
+ ["m5","Fresh Marrakech Orange Juice","moroccan",25,"Pressed to order from Marrakech oranges. No sugar added.","Fresh"],
+ ["m6","Amlou Latte","moroccan",34,"Espresso + steamed milk swirled with argan-almond amlou. Moroccan soul, latte comfort.","New"],
+ ["e1","Espresso","european",18,"Double shot, rich crema, single-origin Arabica.","Classic"],
+ ["e2","Cappuccino","european",28,"Equal thirds: espresso, steamed milk, airy foam. Dusting of cocoa.","Popular"],
+ ["e3","Caffè Latte","european",30,"Smooth, milky, gentle — the all-day European favourite.",""],
+ ["e4","Flat White","european",32,"Double ristretto under velvety micro-foam. Stronger than a latte, silkier than a cappuccino.","Popular"],
+ ["e5","Espresso Macchiato","european",24,"Espresso marked with a spoon of foam.",""],
+ ["e6","Affogato","european",38,"Vanilla ice cream drowned in a hot double espresso.","Dessert"],
+ ["e7","Viennese Coffee","european",34,"Black coffee crowned with whipped cream and chocolate shavings.",""],
+ ["a1","Americano","american",22,"Double espresso topped with hot water. Clean, bold, endless.","Classic"],
+ ["a2","Cold Brew","american",32,"Steeped 18 hours, served over ice. Smooth, chocolatey, low acidity.","Popular"],
+ ["a3","Caramel Macchiato","american",36,"Vanilla milk, espresso, caramel drizzle — layered, not stirred.","Popular"],
+ ["a4","Pumpkin Spice Latte","american",38,"Espresso, pumpkin spice, steamed milk, whipped cream. Autumn in a cup.","Seasonal"],
+ ["a5","Drip Coffee","american",20,"Fresh filter coffee, bottomless-style refills while you sit in.",""],
+ ["a6","Pour Over — Single Origin","american",34,"Brewed to order, V60. Ask the barista for today's origin.","Craft"],
+ ["a7","Caffè Mocha","american",34,"Espresso, real chocolate, steamed milk, cream.",""],
+ ["a8","Vanilla / Hazelnut Latte","american",36,"Your pick of vanilla or hazelnut syrup in a silky latte.",""],
+ ["c1","Iced Latte","cold",30,"Espresso over cold milk and ice. Simple, perfect.","Popular"],
+ ["c2","Iced Americano","cold",24,"Double espresso, cold water, ice. Crisp and bold.",""],
+ ["c3","Frappé Mocha","cold",38,"Blended ice, espresso, chocolate and milk, topped with cream.","Popular"],
+ ["c4","Iced Matcha Latte","cold",36,"Ceremonial matcha whisked with cold milk over ice.","New"],
+ ["c5","Mint Lemonade","cold",22,"Fresh lemon, crushed mint, lightly sweetened. The Marrakech cooler.","Fresh"],
+ ["c6","Mango Smoothie","cold",32,"Mango, banana, yoghurt, a squeeze of orange.",""],
+ ["c7","Iced Hibiscus Tea","cold",24,"Karkadé, chilled, with mint and orange. Ruby-red and refreshing.",""],
+ ["b1","Butter Croissant","bakery",18,"Flaky, buttery, baked fresh every morning.","Popular"],
+ ["b2","Pain au Chocolat","bakery",22,"Croissant dough wrapped around two dark-chocolate batons.",""],
+ ["b3","Msemen with Honey & Amlou","bakery",28,"Moroccan layered pancake, served warm with honey and amlou.","Signature"],
+ ["b4","Baghrir with Honey Butter","bakery",24,"Thousand-hole Moroccan pancake, melted honey butter.",""],
+ ["b5","Harcha","bakery",18,"Golden semolina bread, served warm with butter and jam.",""],
+ ["b6","Chebakia & Kaab Ghzal Plate","bakery",32,"Sesame-honey chebakia and gazelle-horn almond pastries.","Signature"],
+ ["b7","Blueberry Muffin","bakery",22,"Soft, bursting with blueberries, streusel top.",""],
+ ["b8","Chocolate Brownie","bakery",24,"Dense, fudgy, served warm on request.","Popular"],
+ ["b9","New York Cheesecake","bakery",38,"Classic baked cheesecake with berry coulis.",""],
+ ["b10","Cinnamon Roll","bakery",26,"Warm, gooey, cream-cheese frosting.",""],
+ ["b11","Lemon Tart","bakery",30,"Sharp lemon curd in buttery pastry, torched meringue.",""]
+];
+var firebaseConfig = {
+  apiKey: "AIzaSyDeeeXl6ElpDG31ogPX0raiEW2BML5hIPI",
+  authDomain: "miras-coffee.firebaseapp.com",
+  projectId: "miras-coffee",
+  storageBucket: "miras-coffee.firebasestorage.app",
+  messagingSenderId: "224399117137",
+  appId: "1:224399117137:web:913d647b0831af2894a170"
+};
+firebase.initializeApp(firebaseConfig);
+var auth = firebase.auth(), db = firebase.firestore();
+var allUsers = [], soldOut = {};
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function orderDate(o){
+  if (!o.when) return null;
+  if (typeof o.when === "string") return new Date(o.when);
+  if (o.when.toDate) return o.when.toDate();
+  return new Date(o.when);
+}
+function itemDesc(l){
+  var s = l.sel || {};
+  var parts = [];
+  if (s.size && s.size !== "M") parts.push(s.size);
+  if (s.milk && s.milk !== "Regular") parts.push(s.milk);
+  if (s.shot) parts.push("extra shot");
+  if (s.syrup) parts.push("syrup");
+  if (s.sugar) parts.push(s.sugar + " sugar");
+  return parts.length ? " (" + parts.join(", ") + ")" : "";
+}
+function itemName(id){ for (var i = 0; i < MENU.length; i++) if (MENU[i][0] === id) return MENU[i][1]; return id; }
+async function loadAll(){
+  var snap = await db.collection("users").get();
+  allUsers = [];
+  snap.forEach(function(d){ var v = d.data() || {}; v._uid = d.id; allUsers.push(v); });
+  try {
+    var cfg = await db.collection("config").doc("menu").get();
+    soldOut = {};
+    if (cfg.exists) (cfg.data().soldOut || []).forEach(function(id){ soldOut[id] = true; });
+  } catch (e) { soldOut = {}; }
+  render();
+}
+function render(){
+  var orders = [];
+  allUsers.forEach(function(u){
+    (u.orders || []).forEach(function(o){ o._uid = u._uid; o._name = u.name || ""; o._email = u.email || ""; orders.push(o); });
+  });
+  orders.sort(function(a, b){ var da = orderDate(a), dbv = orderDate(b); return (dbv ? dbv.getTime() : 0) - (da ? da.getTime() : 0); });
+  var today = new Date(); today.setHours(0,0,0,0);
+  var tOrders = orders.filter(function(o){ var d = orderDate(o); return d && d >= today; });
+  document.getElementById("statToday").textContent = tOrders.length;
+  document.getElementById("statSales").textContent = tOrders.reduce(function(a, o){ return a + (o.total || 0); }, 0) + " MAD";
+  document.getElementById("statActive").textContent = orders.filter(function(o){ return (o.step || 0) < 3; }).length;
+  document.getElementById("statCust").textContent = allUsers.length;
+  document.getElementById("lastSync").textContent = "Updated " + new Date().toLocaleTimeString("en-GB", {hour:"2-digit",minute:"2-digit"});
+  var stepsFor = function(o){ return o.fulfil === "delivery" ? ["Received","Preparing","On the way","Delivered"] : ["Received","Preparing","Ready","Completed"]; };
+  document.getElementById("ordersList").innerHTML = orders.length ? orders.map(function(o){
+    var steps = stepsFor(o), d = orderDate(o);
+    var btns = steps.map(function(s, i){ return '<button class="small' + (o.step === i ? " on" : "") + '" data-set-step="' + i + '" data-uid="' + o._uid + '" data-oid="' + o.id + '">' + s + '</button>'; }).join("");
+    var items = (o.items || []).map(function(l){ return (l.qty || 1) + " × " + esc(itemName(l.id)) + esc(itemDesc(l)); }).join("<br/>");
+    return '<div class="order"><h3>Order #' + esc(o.id) + ' · ' + (o.total || 0) + ' MAD</h3>'
+      + '<div class="meta">' + esc(o._name) + (o._email ? " · " + esc(o._email) : "") + ' · ' + (o.fulfil === "delivery" ? "Delivery" : "Pickup")
+      + (d ? " · " + d.toLocaleDateString("en-GB") + " " + d.toLocaleTimeString("en-GB", {hour:"2-digit",minute:"2-digit"}) : "")
+      + (o.fulfil === "delivery" && o.address ? " · " + esc(o.address) : "") + '</div>'
+      + '<div class="items">' + items + '</div><div class="steps">' + btns + '</div></div>';
+  }).join("") : '<p class="note">No website orders yet.</p>';
+  var res = [];
+  allUsers.forEach(function(u){ (u.reservations || []).forEach(function(r){ r._name = u.name || r.name || ""; res.push(r); }); });
+  document.getElementById("resList").innerHTML = res.length ? res.map(function(r){
+    return '<div class="menu-row"><span>' + esc(r.name || r._name) + ' · ' + esc(r.date || "") + ' ' + esc(r.time || "") + '</span><span>' + esc(r.guests || "") + ' guests</span></div>';
+  }).join("") : '<p class="note">No web reservations yet.</p>';
+  var custs = allUsers.slice().sort(function(a, b){ return (b.stars || 0) - (a.stars || 0); });
+  document.getElementById("custList").innerHTML = custs.length ? '<table><tr><th>Customer</th><th>Stars</th><th>Orders</th></tr>' + custs.map(function(u){
+    return '<tr><td>' + esc(u.name || u.email || u._uid) + '</td><td>' + (u.stars || 0) + '</td><td>' + ((u.orders || []).length) + '</td></tr>';
+  }).join("") + '</table>' : '<p class="note">No customers saved yet.</p>';
+  document.getElementById("menuList").innerHTML = MENU.map(function(it){
+    return '<div class="menu-row"><span>' + esc(it[1]) + ' · ' + it[3] + ' MAD</span><input type="checkbox" class="switch" data-sold="' + it[0] + '"' + (soldOut[it[0]] ? " checked" : "") + ' aria-label="Sold out: ' + esc(it[1]) + '"/></div>';
+  }).join("");
+}
+document.getElementById("ordersList").addEventListener("click", async function(e){
+  var btn = e.target.closest ? e.target.closest("[data-set-step]") : null; if (!btn) return;
+  var uid = btn.getAttribute("data-uid"), oid = btn.getAttribute("data-oid"), step = parseInt(btn.getAttribute("data-set-step"), 10);
+  btn.disabled = true;
+  try {
+    var doc = await db.collection("users").doc(uid).get(); var d = doc.data() || {};
+    var orders = (d.orders || []).map(function(o){ if (String(o.id) === String(oid)) o.step = step; return o; });
+    await db.collection("users").doc(uid).set({ orders: orders }, { merge: true });
+    await loadAll();
+  } catch (err) { alert("Could not update that order — please try again."); btn.disabled = false; }
+});
+document.getElementById("saveMenuBtn").addEventListener("click", async function(){
+  var list = [];
+  document.querySelectorAll("[data-sold]").forEach(function(cb){ if (cb.checked) list.push(cb.getAttribute("data-sold")); });
+  try {
+    await db.collection("config").doc("menu").set({ soldOut: list });
+    document.getElementById("menuSaved").textContent = "Saved — the Mini App will show these as sold out.";
+  } catch (err) { document.getElementById("menuSaved").textContent = "Could not save — please try again."; }
+});
+document.getElementById("refreshBtn").addEventListener("click", loadAll);
+function showState(user){
+  var signedOut = document.getElementById("signedOut"), notOwner = document.getElementById("notOwner"), dash = document.getElementById("dash");
+  signedOut.classList.toggle("hidden", !!user);
+  notOwner.classList.toggle("hidden", !(user && user.email !== OWNER_EMAIL));
+  dash.classList.toggle("hidden", !(user && user.email === OWNER_EMAIL));
+  document.getElementById("authBtn").textContent = user ? "Sign out" : "Sign in with Google";
+  if (user && user.email !== OWNER_EMAIL) document.getElementById("notOwnerEmail").textContent = user.email || "";
+  if (user && user.email === OWNER_EMAIL) loadAll();
+}
+document.getElementById("authBtn").addEventListener("click", async function(){
+  try { if (auth.currentUser) await auth.signOut(); else await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+  catch (e) { try { await auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider()); } catch (e2) {} }
+});
+document.getElementById("signOutBtn").addEventListener("click", function(){ auth.signOut(); });
+document.getElementById("signOutBtn2").addEventListener("click", function(){ auth.signOut(); });
+auth.onAuthStateChanged(showState);
+setInterval(function(){ if (auth.currentUser && auth.currentUser.email === OWNER_EMAIL) loadAll(); }, 60000);
+</script></body></html>
