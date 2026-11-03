@@ -855,7 +855,7 @@ function renderMenu(){
   else $("menuEmpty").textContent = "Nothing matches that search — try “latte”, “tea” or “croissant”.";
   $("menuGrid").innerHTML = list.map(function(it){
     var fav = !!state.favs[it[0]];
-    return '<div class="card' + (soldOutIds[it[0]] ? ' sold-out' : '') + '" data-open="' + it[0] + '">' + (soldOutIds[it[0]] ? '<img class="sold-stamp" src="assets/sold-out-stamp.svg" alt="Sold out"/>' : '')
+    return '<div class="card' + (soldOutIds[it[0]] ? ' sold-out' : '') + '" data-open="' + it[0] + '">' + (soldOutIds[it[0]] ? '<img class="sold-stamp" src="assets/sold-out-stamp.png" alt="Sold out"/>' : '')
       + (soldOutIds[it[0]] ? '<span class="tag" style="background:#b42318">Sold out</span>' : (it[5] ? '<span class="tag">' + esc(it[5]) + '</span>' : ''))
       + '<button class="fav-btn' + (fav ? " on" : "") + '" data-fav="' + it[0] + '" aria-label="Save ' + esc(it[1]) + ' to favourites">' + heartSVG(fav) + '</button>'
       + '<img src="assets/' + it[0] + '.jpg" alt="' + esc(it[1]) + '" loading="lazy"/>'
@@ -1197,7 +1197,7 @@ async function fbLoadSoldOut(){
       document.querySelectorAll("#bestRail [data-open]").forEach(function(card){
         var id = card.getAttribute("data-open");
         if (soldOutIds[id] && !card.querySelector(".sold-stamp")) {
-          var st = document.createElement("img"); st.className = "sold-stamp"; st.src = "assets/sold-out-stamp.svg"; st.alt = "Sold out";
+          var st = document.createElement("img"); st.className = "sold-stamp"; st.src = "assets/sold-out-stamp.png"; st.alt = "Sold out";
           card.appendChild(st);
         }
       });
