@@ -4,7 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="light dark" />
-<link rel="icon" href="data:," />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#00704a" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
 <title>Mira's Coffee Mini App</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -1402,6 +1405,13 @@ $("miraForm").addEventListener("submit", function(e){
   var q = $("miraInput").value; if (!q.trim()) return;
   miraUserSay(q); miraSay(miraAnswer(q)); $("miraInput").value = "";
 });
+
+/* ================= PWA: installable from Chrome ================= */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function(){
+    try { navigator.serviceWorker.register("sw.js").catch(function(){}); } catch (e) {}
+  });
+}
 
 /* ================= init ================= */
 renderMenu();
